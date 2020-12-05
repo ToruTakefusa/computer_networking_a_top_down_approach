@@ -13,7 +13,7 @@ while True:
     connectionSocket, addr = serverSocket.accept()
     try:
         message = connectionSocket.recv(1024).decode()
-        filename = "/" + os.getcwd() + message.split()[1]
+        filename = "/" + os.getcwd() + "/01_WebServer/" + message.split()[1]
         f = open(filename[1:], "r")
         outputdata = f.read()
         connectionSocket.send("HTTP/1.1 200 OK\r\n".encode())
