@@ -54,3 +54,5 @@ receive(clientSocket, 250)
 # Send QUIT command and get server response.
 send(clientSocket, 'QUIT\r\n')
 receive(clientSocket, 221)
+
+clientSocket.close()
