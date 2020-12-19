@@ -1,19 +1,20 @@
 import socket
 import sys
 import os
+import ssl
 
 
-# import ssl
-
-
-def get_response(socket, host, filename):
-    socket.connect((host, 80))
-    socket_file = socket.makefile("wrb", 0)
+def get_response(sock, host, filename):
+    sock.connect((host, 80))
+    socket_file = sock.makefile("wrb", 0)
     request = "GET " + "http://" + filename + " HTTP/1.0\r\nUser-Agent: Mozila/5.0\r\n\r\n"
     socket_file.write(request.encode())
     socket_file.flush()
-    return socket_file.read()
-    c.close()
+    response = socket_file.read()
+    if not response:
+        raise ValueError("Cannot receive response.")
+    return response
+
 
 def read_from_cache(file_to_use):
     with open(file_to_use, "r") as f:
@@ -73,13 +74,12 @@ while True:
             # Create a socket on the proxy server
             host_name = filename.replace("www.", "", 1)
             print(host_name)
+
             c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                # Connect to the socket to port 80
-
                 # Create a new file in the cache for the requested file.
                 tmpFile = open("./" + filename, "wb")
-                content = get_response(c, filename)
+                content = get_response(c, host_name, filename)
                 tmpFile.write(content)
                 tcpCliSock.send(content)
             except Exception as e:
@@ -87,7 +87,7 @@ while True:
                 print(e.with_traceback(trace))
             finally:
                 tmpFile.close()
-
+                c.close()
                 tcpCliSock.close()
     except IOError:
         # HTTP response message for file not found
