@@ -1,6 +1,33 @@
 import socket
 import sys
+import os
+
+
 # import ssl
+
+
+def get_response(socket, filename):
+    socket_file = socket.makefile("wrb", 0)
+    request = "GET " + "http://" + filename + " HTTP/1.0\r\nUser-Agent: Mozila/5.0\r\n\r\n"
+    socket_file.write(request.encode())
+    socket_file.flush()
+    return socket_file.read()
+
+
+def read_from_cache(file_to_use):
+    with open(file_to_use, "r") as f:
+        return f.readlines()
+
+
+def send_cache(socket, file_to_use):
+    # ProxyServer finds a cache hit and generates a response message
+    socket.send("HTTP/1.1 200 OK\r\n".encode())
+    socket.send("ContentType:text/html\r\n".encode())
+    output_data = read_from_cache(file_to_use)
+    for output in output_data:
+        socket.send(output)
+    print('Read from cache')
+
 
 if len(sys.argv) <= 1:
     print('Usage: "python ProxyServer.py server_ip"\nserver_ip: It is the IP Address Of Proxy Server')
@@ -12,6 +39,7 @@ PORT_HTTPS = 443
 
 # Create a server socket, bind it to a port and start listening
 tcpSerSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+tcpSerSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
 tcpSerSock.bind(('', SERVER_PORT))
 tcpSerSock.listen(1)
 
@@ -22,62 +50,43 @@ while True:
     print('Received a connection from:', addr)
     message = tcpCliSock.recv(SIZE).decode()
     print(message)
+    if message == "" or ('.com' not in message):
+        continue
 
     # Extract the filename from the given message
     print(message.split()[1])
     filename = message.split()[1].partition("/")[2]
     print(filename)
     fileExist = False
-    filetouse = "/" + filename
-    print(filetouse)
+    file_to_use = ("/" + filename)[1:]
+    print(file_to_use)
 
     try:
         # Check whether the file exist in the cache
-        f = open(filetouse[1:], "r")
-        outputdata = f.readlines()
-        fileExist = True
-
-        # ProxyServer finds a cache hit and generates a response message
-        tcpCliSock.send("HTTP/1.1 200 OK\r\n".encode())
-        tcpCliSock.send("ContentType:text/html\r\n".encode())
-        for output in outputdata:
-            tcpCliSock.send(output)
-        f.close()
-        print('Read from cache')
-
-    # Error handling for file not found in cache
-    except IOError:
-        if not fileExist:
-            # Create a socket on the proxyserver
+        if os.path.isfile(file_to_use):
+            send_cache(tcpCliSock, file_to_use)
+        else:
+            # Create a socket on the proxy server
+            host_name = filename.replace("www.", "", 1)
+            print(host_name)
             c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            hostn = filename.replace("www.", "", 1)
-            print(hostn)
-
-        try:
-            # Connect to the socket to port 80
-            # context = ssl.create_default_context()
-            # wrapSocket = context.wrap_socket(c, server_hostname=hostn)
-            # wrapSocket.connect((hostn, PORT_HTTPS))
-            c.connect((hostn, 80))
-            request = "GET "+"http://" + filename + " HTTP/1.0\r\nUser-Agent: Mozila/5.0\r\n\r\n"
-            c.send(request.encode())
-            content = c.recv(SIZE)
-
-            # Create a new file in the cache for the requested file.
-            # Also send the response in the buffer to client socket and the corresponding file in the cache
-            tmpFile = open("./" + filename, "wb")
-            tmpFile.write(content)
-            tcpCliSock.send(content)
-            tmpFile.close()
-        except Exception as e:
-            trace = sys.exc_info()[2]
-            print("Exception happend!")
-            print(e.with_traceback(trace))
-            print("Illegal request")
-    else:
+            try:
+                # Connect to the socket to port 80
+                c.connect((host_name, 80))
+                # Create a new file in the cache for the requested file.
+                tmpFile = open("./" + filename, "wb")
+                content = get_response(c, filename)
+                tmpFile.write(content)
+                tcpCliSock.send(content)
+            except Exception as e:
+                trace = sys.exc_info()[2]
+                print(e.with_traceback(trace))
+            finally:
+                tmpFile.close()
+                c.close()
+                tcpCliSock.close()
+    except IOError:
         # HTTP response message for file not found
         tcpCliSock.send("HTTP/1.1 404 Not Found".encode())
         # Close the client and the server sockets
         tcpCliSock.close()
-        # wrapSocket.close()
-        c.close()
