@@ -6,13 +6,14 @@ import os
 # import ssl
 
 
-def get_response(socket, filename):
+def get_response(socket, host, filename):
+    socket.connect((host, 80))
     socket_file = socket.makefile("wrb", 0)
     request = "GET " + "http://" + filename + " HTTP/1.0\r\nUser-Agent: Mozila/5.0\r\n\r\n"
     socket_file.write(request.encode())
     socket_file.flush()
     return socket_file.read()
-
+    c.close()
 
 def read_from_cache(file_to_use):
     with open(file_to_use, "r") as f:
@@ -25,7 +26,7 @@ def send_cache(socket, file_to_use):
     socket.send("ContentType:text/html\r\n".encode())
     output_data = read_from_cache(file_to_use)
     for output in output_data:
-        socket.send(output)
+        socket.send(output.encode())
     print('Read from cache')
 
 
@@ -64,7 +65,10 @@ while True:
     try:
         # Check whether the file exist in the cache
         if os.path.isfile(file_to_use):
-            send_cache(tcpCliSock, file_to_use)
+            try:
+                send_cache(tcpCliSock, file_to_use)
+            finally:
+                tcpCliSock.close()
         else:
             # Create a socket on the proxy server
             host_name = filename.replace("www.", "", 1)
@@ -72,7 +76,7 @@ while True:
             c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 # Connect to the socket to port 80
-                c.connect((host_name, 80))
+
                 # Create a new file in the cache for the requested file.
                 tmpFile = open("./" + filename, "wb")
                 content = get_response(c, filename)
@@ -83,10 +87,11 @@ while True:
                 print(e.with_traceback(trace))
             finally:
                 tmpFile.close()
-                c.close()
+
                 tcpCliSock.close()
     except IOError:
         # HTTP response message for file not found
+        print("IOError")
         tcpCliSock.send("HTTP/1.1 404 Not Found".encode())
         # Close the client and the server sockets
         tcpCliSock.close()
