@@ -125,5 +125,4 @@ def ping(host, timeout=1):
 
 
 # ping("google.com")
-# ping("127.0.0.1")
-ping ("192.168.11.3")
+ping("127.0.0.1")
